@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Search Algorithm Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        .container-shadow {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        #canvas {
+            border: 2px solid #3b82f6;
+            background-color: #f9fafb;
+            border-radius: 0.75rem;
+        }
+        /* Custom scrollbar for control panel */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans p-4 sm:p-8 min-h-screen flex items-start justify-center">
+
+    <div class="max-w-7xl w-full flex flex-col lg:flex-row gap-8">
+
+        <!-- Control Panel -->
+        <div class="lg:w-1/3 bg-white p-6 rounded-xl container-shadow custom-scrollbar overflow-y-auto max-h-[85vh]">
+            <h1 class="text-3xl font-extrabold text-indigo-700 mb-6 border-b pb-2">Search Visualizer</h1>
+
+            <div class="space-y-4 mb-6">
+                <!-- Algorithm Selector -->
+                <div>
+                    <label for="algorithm" class="block text-sm font-medium text-gray-700 mb-1">Select Algorithm</label>
+                    <select id="algorithm" onchange="resetVisualization()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out">
+                        <option value="BFS">1. Breadth-First Search (BFS)</option>
+                        <option value="DFS">2. Depth-First Search (DFS)</option>
+                        <option value="DLS">3. Depth-Limited Search (DLS)</option>
+                        <option value="IDDFS">4. Iterative Deepening DFS (IDDFS)</option>
+                        <option value="UCS">5. Uniform Cost Search (UCS)</option>
+                        <option value="Bidirectional">6. Bidirectional Search (BDS)</option>
+                    </select>
+                </div>
+
+                <!-- Start Node Selector -->
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label for="startNode" class="block text-sm font-medium text-gray-700 mb-1">Start Node</label>
+                        <select id="startNode" onchange="resetVisualization()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out"></select>
+                    </div>
+                    <!-- Goal Node Selector -->
+                    <div class="flex-1">
+                        <label for="goalNode" class="block text-sm font-medium text-gray-700 mb-1">Goal Node</label>
+                        <select id="goalNode" onchange="resetVisualization()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out"></select>
+                    </div>
+                </div>
+
+                <!-- Depth Limit (for DLS/IDDFS) -->
+                <div id="depthLimitControl" class="hidden">
+                    <label for="depthLimit" class="block text-sm font-medium text-gray-700 mb-1">Depth Limit (DLS/IDDFS)</label>
+                    <input type="number" id="depthLimit" value="2" min="1" onchange="resetVisualization()" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out">
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 mb-6">
+                <button id="startButton" onclick="startSearch()" class="flex-1 py-3 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 disabled:bg-gray-400">
+                    Start Search
+                </button>
+                <button id="resetButton" onclick="resetVisualization()" class="flex-1 py-3 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition duration-200 focus:outline-none focus:ring-4 focus:ring-gray-500 focus:ring-opacity-50">
+                    Reset
+                </button>
+            </div>
+
+            <!-- Status and Current State -->
+            <div class="space-y-4">
+                <h2 class="text-xl font-bold text-gray-800 border-b pb-1">Current State</h2>
+
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Status:</p>
+                    <p id="statusMessage" class="font-semibold text-lg text-green-600">Ready.</p>
+                </div>
+
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Search Structure (Queue/Stack/PQ):</p>
+                    <div id="frontierDisplay" class="p-2 bg-gray-50 rounded-lg text-sm text-gray-800 font-mono min-h-[3rem] overflow-x-auto whitespace-nowrap">Empty</div>
+                </div>
+
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Path Cost / Depth:</p>
+                    <p id="costDepthDisplay" class="text-md text-gray-700">-</p>
+                </div>
+
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Algorithm Details:</p>
+                    <p id="algoDetails" class="text-md text-gray-700">Initial depth limit: 2.</p>
+                </div>
+
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Final Result:</p>
+                    <div id="resultDisplay" class="p-3 bg-gray-100 rounded-lg text-gray-800 min-h-[4rem]">
+                        <p class="font-bold text-lg text-indigo-700">Path:</p>
+                        <p id="finalPath">-</p>
+                        <p class="font-bold text-lg text-indigo-700 mt-2">Cost:</p>
+                        <p id="finalCost">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Canvas Visualization -->
+        <div class="lg:w-2/3 bg-white p-4 rounded-xl container-shadow">
+            <canvas id="canvas" class="w-full" width="800" height="600"></canvas>
+            <div class="text-center mt-3 text-gray-600 text-sm">Graph Visualization Area. Nodes are: A, B, C, D, E, F, G, H, I, J, K, L, M.</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const nodeRadius = 20;
+        const searchSpeed = 400; // milliseconds per step
+
+        let animationInterval;
+        let isSearchRunning = false;
+        let currentState = {}; // Stores the current state of the search for visualization
+
+        // --- GRAPH DEFINITION ---
+        const graph = {
+            // Node positions (x, y coordinates normalized to 800x600 canvas)
+            nodes: {
+                A: { x: 400, y: 50 },
+                B: { x: 250, y: 150 }, C: { x: 550, y: 150 },
+                D: { x: 150, y: 250 }, E: { x: 350, y: 250 }, F: { x: 450, y: 250 }, G: { x: 650, y: 250 },
+                H: { x: 50, y: 350 }, I: { x: 250, y: 350 }, J: { x: 450, y: 350 }, K: { x: 650, y: 350 },
+                L: { x: 550, y: 450 }, M: { x: 400, y: 550 } // Goal hub
+            },
+            // Adjacency list (Node: [Neighbor, Weight])
+            edges: {
+                A: [{ to: 'B', weight: 3 }, { to: 'C', weight: 6 }],
+                B: [{ to: 'D', weight: 4 }, { to: 'E', weight: 4 }],
+                C: [{ to: 'F', weight: 2 }, { to: 'G', weight: 3 }],
+                D: [{ to: 'H', weight: 5 }, { to: 'I', weight: 1 }],
+                E: [{ to: 'J', weight: 2 }],
+                F: [{ to: 'K', weight: 4 }],
+                G: [{ to: 'L', weight: 5 }],
+                H: [{ to: 'M', weight: 1 }],
+                I: [{ to: 'M', weight: 7 }],
+                J: [{ to: 'L', weight: 8 }],
+                K: [{ to: 'M', weight: 1 }],
+                L: [{ to: 'M', weight: 2 }],
+                M: [] // Terminal node
+            }
+        };
+
+        const allNodeKeys = Object.keys(graph.nodes);
+
+        // Populate dropdowns with node keys
+        function populateDropdowns() {
+            const startSelect = document.getElementById('startNode');
+            const goalSelect = document.getElementById('goalNode');
+
+            allNodeKeys.forEach(key => {
+                const startOption = new Option(key, key);
+                const goalOption = new Option(key, key);
+                startSelect.add(startOption);
+                goalSelect.add(goalOption);
+            });
+
+            // Set reasonable defaults
+            startSelect.value = 'A';
+            goalSelect.value = 'M';
+        }
+
+        // --- DRAWING FUNCTIONS ---
+
+        function drawGraph() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const { visited, current, path, frontier, biFrontier, algorithm, biVisited } = currentState;
+            const isBiSearch = algorithm === 'Bidirectional';
+
+            // 1. Draw Edges
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#9ca3af';
+
+            for (const from in graph.edges) {
+                for (const edge of graph.edges[from]) {
+                    const to = edge.to;
+                    const fromPos = graph.nodes[from];
+                    const toPos = graph.nodes[to];
+
+                    // Check if edge is part of the final path
+                    const pathEdge = path && path.some((node, i) => i < path.length - 1 && (node === from && path[i + 1] === to));
+
+                    ctx.strokeStyle = pathEdge ? '#10b981' : '#9ca3af';
+                    ctx.lineWidth = pathEdge ? 3 : 1;
+
+                    // Draw line
+                    ctx.beginPath();
+                    ctx.moveTo(fromPos.x, fromPos.y);
+                    ctx.lineTo(toPos.x, toPos.y);
+                    ctx.stroke();
+
+                    // Draw Arrowhead (simple)
+                    const angle = Math.atan2(toPos.y - fromPos.y, toPos.x - fromPos.x);
+                    const headLen = 10;
+                    ctx.lineTo(toPos.x - headLen * Math.cos(angle - Math.PI / 6), toPos.y - headLen * Math.sin(angle - Math.PI / 6));
+                    ctx.moveTo(toPos.x, toPos.y);
+                    ctx.lineTo(toPos.x - headLen * Math.cos(angle + Math.PI / 6), toPos.y - headLen * Math.sin(angle + Math.PI / 6));
+                    ctx.stroke();
+
+                    // Draw Weight
+                    const midX = (fromPos.x + toPos.x) / 2;
+                    const midY = (fromPos.y + toPos.y) / 2;
+                    ctx.fillStyle = '#1f2937';
+                    ctx.font = '14px Inter';
+                    ctx.fillText(edge.weight, midX + 5, midY - 5);
+                }
+            }
+
+            // 2. Draw Nodes
+            for (const nodeKey in graph.nodes) {
+                const pos = graph.nodes[nodeKey];
+                const isStart = nodeKey === currentState.startNode;
+                const isGoal = nodeKey === currentState.goalNode;
+                const isVisited = visited.has(nodeKey);
+                const isCurrent = nodeKey === current;
+                const isInPath = path && path.includes(nodeKey);
+                const isMeeting = isBiSearch && currentState.status === 'MEETING' && nodeKey === currentState.meetingNode;
+                
+                // Determine if node is in the frontier for visualization
+                let isInFrontier = false;
+                if (frontier) {
+                    if (Array.isArray(frontier)) {
+                        // For BFS/DFS/DLS/IDDFS (Array)
+                        isInFrontier = frontier.some(item => item.node === nodeKey);
+                    } else if (typeof frontier.has === 'function') { 
+                        // For UCS (PriorityQueue) - robust check
+                        isInFrontier = frontier.has(nodeKey);
+                    }
+                }
+                
+                // Bidirectional specific frontier check (uses two arrays)
+                let isInBiFrontier = false;
+                if (isBiSearch) {
+                    isInBiFrontier = currentState.biStartQueue.some(item => item.node === nodeKey) || 
+                                     currentState.biGoalQueue.some(item => item.node === nodeKey);
+                }
+
+                // Determine Fill Color
+                let fillColor = '#ffffff';
+                if (isStart) fillColor = '#fcd34d'; // Yellow for Start
+                if (isGoal) fillColor = '#ef4444'; // Red for Goal
+                if (isInPath) fillColor = '#10b981'; // Green for Final Path
+                if (isMeeting) fillColor = '#8b5cf6'; // Purple for Meeting Point
+                else if (isCurrent) fillColor = '#3b82f6'; // Blue for Current Node
+                else if (isVisited || (isBiSearch && biVisited.has(nodeKey))) fillColor = '#93c5fd'; // Light Blue for Visited
+                else if (isInFrontier || isInBiFrontier) fillColor = '#60a5fa'; // Mid Blue for Frontier
+
+                // Determine Text Color
+                let textColor = (isCurrent || isInPath || isMeeting) ? '#ffffff' : '#1f2937';
+
+                // Draw Circle
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
+                ctx.fillStyle = fillColor;
+                ctx.fill();
+                ctx.strokeStyle = '#1f2937';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw Text (Node Label)
+                ctx.fillStyle = textColor;
+                ctx.font = '16px Inter bold';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(nodeKey, pos.x, pos.y);
+
+                // Draw Depth/Cost Info (if applicable)
+                if (currentState.costs && currentState.costs[nodeKey] !== undefined) {
+                    ctx.fillStyle = '#000000';
+                    ctx.font = '10px Inter';
+                    ctx.fillText(`C:${currentState.costs[nodeKey].toFixed(1)}`, pos.x, pos.y + nodeRadius + 8);
+                    ctx.fillText(`D:${currentState.depths[nodeKey] !== undefined ? currentState.depths[nodeKey] : '-'}`, pos.x, pos.y + nodeRadius + 18);
+                }
+            }
+        }
+
+        // --- UTILITY CLASSES & STRUCTURES ---
+
+        /** Represents an item in the frontier (used by all algorithms) */
+        class QueueItem {
+            constructor(node, path, cost = 0, depth = 0) {
+                this.node = node;
+                this.path = path;
+                this.cost = cost;
+                this.depth = depth;
+            }
+        }
+
+        /** Simple Priority Queue for UCS/Bidirectional (by cost) */
+        class PriorityQueue {
+            constructor(priorityKey = 'cost') {
+                this.values = [];
+                this.priorityKey = priorityKey;
+            }
+
+            enqueue(element) {
+                // Remove existing item with higher cost (if any)
+                this.values = this.values.filter(item => !(item.node === element.node && element[this.priorityKey] <= item[this.priorityKey]));
+
+                this.values.push(element);
+                this.values.sort((a, b) => a[this.priorityKey] - b[this.priorityKey]);
+            }
+
+            dequeue() {
+                return this.values.shift();
+            }
+
+            isEmpty() {
+                return this.values.length === 0;
+            }
+
+            has(node) {
+                return this.values.some(item => item.node === node);
+            }
+
+            display() {
+                return this.values.map(item => `${item.node}(${item[this.priorityKey]})`).join(', ');
+            }
+        }
+
+        // --- ALGORITHM LOGIC SETUP ---
+
+        function initializeSearchState(algo) {
+            const startNode = document.getElementById('startNode').value;
+            const goalNode = document.getElementById('goalNode').value;
+            const limit = parseInt(document.getElementById('depthLimit').value);
+
+            // Initial state structure
+            const initialState = {
+                algorithm: algo,
+                startNode: startNode,
+                goalNode: goalNode,
+                limit: limit,
+                status: 'READY',
+                current: startNode, // Current node being processed
+                path: null,         // Final path (array of node keys)
+                visited: new Set(), // Set of already expanded nodes (Forward)
+                frontier: null,     // Queue/Stack/PriorityQueue structure (Forward)
+                costs: {},          // Min cost to reach a node (for UCS/Bidirectional)
+                depths: {},         // Depth of a node
+
+                // Bidirectional specific
+                biFrontier: null, // Not used directly, kept for future expansion
+                biVisited: new Set(), // Visited set for backward search
+                biParents: {}, // Parent map for backward search path reconstruction
+                biStartQueue: null, // Queue for forward search
+                biGoalQueue: null, // Queue for backward search
+
+                // IDDFS specific
+                currentIDDSLimit: 1,
+            };
+
+            // Set initial costs and depths
+            initialState.costs[startNode] = 0;
+            initialState.depths[startNode] = 0;
+
+            if (algo === 'BFS' || algo === 'DFS' || algo === 'DLS' || algo === 'IDDFS') {
+                // Array used as Queue (shift/push) or Stack (pop/push)
+                initialState.frontier = [new QueueItem(startNode, [startNode])];
+            } else if (algo === 'UCS') {
+                const pq = new PriorityQueue('cost');
+                pq.enqueue(new QueueItem(startNode, [startNode], 0, 0));
+                initialState.frontier = pq;
+            } else if (algo === 'Bidirectional') {
+                // Forward search (from start)
+                initialState.biStartQueue = [new QueueItem(startNode, [startNode], 0, 0)];
+                initialState.visited.add(startNode);
+                initialState.costs[startNode] = 0;
+                initialState.depths[startNode] = 0;
+                initialState.parents = { [startNode]: null }; // Store parent for forward path extension
+
+                // Backward search (from goal)
+                initialState.biGoalQueue = [new QueueItem(goalNode, [goalNode], 0, 0)];
+                initialState.biVisited.add(goalNode);
+                initialState.biParents[goalNode] = null; // Store reverse parent
+            }
+
+            return initialState;
+        }
+
+        // --- ALGORITHM STEP FUNCTIONS ---
+
+        function stepSearch(state) {
+            const { algorithm } = state;
+
+            // Update UI details for DLS/IDDFS
+            if (algorithm === 'DLS') {
+                document.getElementById('algoDetails').textContent = `Current Limit: ${state.limit}`;
+            } else if (algorithm === 'IDDFS') {
+                document.getElementById('algoDetails').textContent = `Current Depth Limit: ${state.currentIDDSLimit} (Max Limit: ${state.limit})`;
+            } else {
+                document.getElementById('algoDetails').textContent = '-';
+            }
+
+
+            if (algorithm === 'BFS' || algorithm === 'DFS' || algorithm === 'DLS' || algorithm === 'UCS') {
+                return stepSingleDirectional(state);
+            } else if (algorithm === 'IDDFS') {
+                return stepIDDFS(state);
+            } else if (algorithm === 'Bidirectional') {
+                return stepBidirectional(state);
+            }
+        }
+
+        function stepSingleDirectional(state) {
+            let { frontier, visited, costs, depths, startNode, goalNode, algorithm, limit } = state;
+
+            const isArray = Array.isArray(frontier);
+            // Use the existence of .isEmpty() function for the check instead of instanceof
+            const isEmpty = isArray ? frontier.length === 0 : (typeof frontier.isEmpty === 'function' ? frontier.isEmpty() : true);
+
+            if (isEmpty) {
+                state.status = 'FAILED';
+                return state;
+            }
+
+            // 1. Get the next node (Pop/Dequeue)
+            let currentItem;
+            if (algorithm === 'BFS') {
+                currentItem = frontier.shift(); // Queue (FIFO)
+            } else if (algorithm === 'DFS' || algorithm === 'DLS' || algorithm === 'IDDFS') {
+                currentItem = frontier.pop(); // Stack (LIFO)
+            } else if (algorithm === 'UCS') {
+                currentItem = frontier.dequeue(); // Priority Queue
+            }
+
+            const currentNode = currentItem.node;
+            const currentPath = currentItem.path;
+            const currentCost = currentItem.cost;
+            const currentDepth = currentItem.depth;
+
+            state.current = currentNode;
+            state.costs[currentNode] = currentCost;
+            state.depths[currentNode] = currentDepth;
+
+            // 2. Goal Check
+            if (currentNode === goalNode) {
+                state.status = 'GOAL_FOUND';
+                state.path = currentPath;
+                state.current = currentNode; // Keep highlight on goal
+                return state;
+            }
+
+            // 3. Mark as Visited (Expanded)
+            visited.add(currentNode);
+
+            // 4. Check Depth Limit (for DLS only)
+            if (algorithm === 'DLS' && currentDepth >= limit) {
+                return state; // Do not expand further, but keep searching siblings
+            }
+
+            // 5. Expand Neighbors
+            const neighbors = graph.edges[currentNode] || [];
+            neighbors.forEach(edge => {
+                const neighbor = edge.to;
+                const newPath = [...currentPath, neighbor];
+                const newCost = currentCost + edge.weight;
+                const newDepth = currentDepth + 1;
+
+                if (!visited.has(neighbor) || algorithm === 'UCS') {
+                    // For BFS/DFS/DLS/IDDFS: only add to frontier if not already fully expanded (visited)
+                    // For UCS: we must check if a cheaper path is found
+
+                    if (algorithm === 'UCS') {
+                        // UCS: If we found a cheaper path (or it's new), update and enqueue
+                        if (newCost < (state.costs[neighbor] === undefined ? Infinity : state.costs[neighbor])) {
+                            state.costs[neighbor] = newCost;
+                            state.depths[neighbor] = newDepth;
+                            frontier.enqueue(new QueueItem(neighbor, newPath, newCost, newDepth));
+                        }
+                    } else if (algorithm === 'DLS' || algorithm === 'IDDFS') {
+                        // DLS/IDDFS: Standard DFS/DLS behavior (only add if not visited and within depth)
+                        if (newDepth <= limit && !visited.has(neighbor)) {
+                             // Note: DLS/IDDFS needs to use an array as stack (pop/push)
+                            frontier.push(new QueueItem(neighbor, newPath, newCost, newDepth));
+                        }
+                    } else { // BFS/DFS
+                        // Standard check: only add if not expanded (visited)
+                        if (!visited.has(neighbor)) {
+                            frontier.push(new QueueItem(neighbor, newPath, newCost, newDepth));
+                        }
+                    }
+                }
+            });
+
+            state.status = 'RUNNING';
+            return state;
+        }
+
+        function stepIDDFS(state) {
+            // IDDFS wraps DLS.
+            // If the search fails at the current limit, reset and increase the limit.
+            
+            // Check if search failed or just finished a limit iteration
+            const currentFrontierEmpty = Array.isArray(state.frontier) ? state.frontier.length === 0 : state.frontier.isEmpty();
+
+            if (state.status === 'READY' || state.status === 'LIMIT_REACHED' || (state.status === 'RUNNING' && currentFrontierEmpty)) {
+                
+                if (state.currentIDDSLimit > state.limit) {
+                    state.status = 'FAILED';
+                    return state;
+                }
+
+                // Initialize/Reset DLS for the new limit
+                state.limit = state.currentIDDSLimit;
+                state.frontier = [new QueueItem(state.startNode, [state.startNode], 0, 0)];
+                state.visited = new Set();
+                state.costs = { [state.startNode]: 0 };
+                state.depths = { [state.startNode]: 0 };
+                state.status = 'RUNNING';
+                document.getElementById('algoDetails').textContent = `Current Depth Limit: ${state.currentIDDSLimit} (Max Limit: ${state.limit})`;
+                
+                // If we are just starting a new limit, we don't execute a step, we just reset the state
+                if (state.currentIDDSLimit > 1 || state.status === 'LIMIT_REACHED') {
+                    state.currentIDDSLimit++;
+                    return state;
+                }
+            }
+            
+            let newState = stepSingleDirectional(state);
+
+            if (newState.status === 'GOAL_FOUND') {
+                // Done
+                return newState;
+            }
+            
+            // After running a step, check if the frontier is now empty (meaning DLS for this limit failed)
+            const frontierEmptyAfterStep = Array.isArray(newState.frontier) ? newState.frontier.length === 0 : newState.frontier.isEmpty();
+
+            if (frontierEmptyAfterStep && newState.status !== 'GOAL_FOUND') {
+                // DLS failed for this limit, so increase limit and prepare to restart DLS
+                if (newState.currentIDDSLimit >= newState.limit) {
+                    newState.status = 'FAILED';
+                    return newState;
+                }
+                newState.currentIDDSLimit++;
+                newState.status = 'LIMIT_REACHED'; // Custom status to signal UI update before restarting DLS
+                return newState;
+            }
+
+            return newState;
+        }
+
+        // Bidirectional Search Helper Function
+        function biExpand(state, isForward) {
+            const queue = isForward ? state.biStartQueue : state.biGoalQueue;
+            const visitedSet = isForward ? state.visited : state.biVisited;
+            const parentMap = isForward ? state.parents : state.biParents; 
+            const otherVisitedSet = isForward ? state.biVisited : state.visited;
+            
+            const costMap = state.costs; // Only update cost map for forward search initially
+            
+            if (queue.length === 0) return null;
+
+            const currentItem = queue.shift();
+            const currentNode = currentItem.node;
+            const currentPath = currentItem.path; // Path for forward, single node for backward path reconstruction
+            const currentCost = currentItem.cost;
+
+            // Check for intersection
+            if (otherVisitedSet.has(currentNode)) {
+                // Intersection found!
+                state.status = 'MEETING';
+                state.meetingNode = currentNode;
+                
+                // 1. Reconstruct Forward Path: Start -> Meeting
+                let forwardPath = [...currentPath]; // This is the path built in the forward search
+                
+                // 2. Reconstruct Backward Path: Meeting -> Goal
+                let backwardPathNodes = [];
+                let node = currentNode;
+                
+                // Use the parent map of the backward search (biParents)
+                while (state.biParents[node]) {
+                    node = state.biParents[node];
+                    backwardPathNodes.push(node);
+                }
+                
+                // Total path is forward path + reversed backward path (excluding the meeting node which is duplicated)
+                // Remove the meeting node from the backward path reconstruction result, as it's the last node in the forward path
+                
+                // Backward path is currently: [node_before_meeting, ..., goal]
+                // We want: [node_after_meeting, ..., goal]
+                const finalBackwardPath = backwardPathNodes.reverse();
+                
+                state.path = forwardPath.concat(finalBackwardPath);
+                
+                return state;
+            }
+
+            // 1. Mark as visited (expanded)
+            visitedSet.add(currentNode);
+            state.current = currentNode; // To highlight the expanded node
+
+            // 2. Determine Edges
+            const edgesToExpand = isForward ? graph.edges[currentNode] : getReverseEdges(currentNode);
+
+            // 3. Expand Neighbors
+            edgesToExpand.forEach(edge => {
+                const neighbor = isForward ? edge.to : edge.from;
+                const weight = edge.weight;
+
+                if (!visitedSet.has(neighbor)) {
+                    const newCost = currentCost + weight;
+                    
+                    if (isForward) {
+                        const newPath = [...currentPath, neighbor];
+                        costMap[neighbor] = newCost;
+                        queue.push(new QueueItem(neighbor, newPath, newCost));
+                    } else {
+                        // For backward search, record parent to reconstruct path later
+                        state.biParents[neighbor] = currentNode;
+                        queue.push(new QueueItem(neighbor, [neighbor], newCost)); // Path doesn't matter for queuing
+                    }
+                }
+            });
+
+            state.status = 'RUNNING';
+            return state;
+        }
+
+        // Helper for Bidirectional Search: Get reverse edges (nodes pointing to the current node)
+        function getReverseEdges(node) {
+            const reverseEdges = [];
+            for (const from in graph.edges) {
+                for (const edge of graph.edges[from]) {
+                    if (edge.to === node) {
+                        reverseEdges.push({ from: from, to: node, weight: edge.weight });
+                    }
+                }
+            }
+            return reverseEdges;
+        }
+
+        function stepBidirectional(state) {
+            // Alternate between forward and backward search steps
+            let newState = state;
+
+            if (state.biStartQueue.length > 0) {
+                newState = biExpand(state, true); // Forward Search Step
+                if (newState.status !== 'RUNNING' && newState.status !== 'READY') return newState;
+            }
+
+            if (state.biGoalQueue.length > 0 && newState.status !== 'MEETING') { // Don't run backward if meeting found in forward step
+                newState = biExpand(newState, false); // Backward Search Step
+                if (newState.status !== 'RUNNING' && newState.status !== 'READY') return newState;
+            }
+
+            if (state.biStartQueue.length === 0 && state.biGoalQueue.length === 0 && newState.status === 'RUNNING') {
+                newState.status = 'FAILED';
+                return newState;
+            }
+
+            return newState;
+        }
+
+        // --- MAIN CONTROL FUNCTIONS ---
+
+        function startSearch() {
+            if (isSearchRunning) return;
+
+            const algo = document.getElementById('algorithm').value;
+            currentState = initializeSearchState(algo);
+
+            document.getElementById('startButton').disabled = true;
+            isSearchRunning = true;
+
+            animationInterval = setInterval(nextStep, searchSpeed);
+        }
+
+        function nextStep() {
+            currentState = stepSearch(currentState);
+            updateUI();
+            drawGraph();
+
+            if (currentState.status === 'GOAL_FOUND' || currentState.status === 'FAILED') {
+                clearInterval(animationInterval);
+                isSearchRunning = false;
+                document.getElementById('startButton').disabled = true;
+            }
+
+            // Special IDDFS handling: if limit is reached, it resets and restarts with increased limit
+            if (currentState.status === 'LIMIT_REACHED') {
+                // Pause briefly to show the limit was reached before restarting the interval
+                clearInterval(animationInterval);
+                setTimeout(() => {
+                    animationInterval = setInterval(nextStep, searchSpeed);
+                }, searchSpeed * 2);
+            }
+        }
+
+        function updateUI() {
+            const statusEl = document.getElementById('statusMessage');
+            const frontierEl = document.getElementById('frontierDisplay');
+            const costDepthEl = document.getElementById('costDepthDisplay');
+            const resultPathEl = document.getElementById('finalPath');
+            const resultCostEl = document.getElementById('finalCost');
+
+            // --- Status Message ---
+            let statusClass = 'text-green-600';
+            let statusText = 'Ready.';
+            if (currentState.status === 'RUNNING') {
+                statusText = 'Running...';
+                statusClass = 'text-blue-600';
+            } else if (currentState.status === 'GOAL_FOUND') {
+                statusText = `Goal Found: ${currentState.goalNode}!`;
+                statusClass = 'text-indigo-700';
+            } else if (currentState.status === 'MEETING') {
+                statusText = `Meeting Point Found: ${currentState.meetingNode}!`;
+                statusClass = 'text-purple-600';
+            } else if (currentState.status === 'FAILED') {
+                statusText = 'Search Failed (No Path Found or Limit Reached).';
+                statusClass = 'text-red-600';
+            } else if (currentState.status === 'LIMIT_REACHED') {
+                 statusText = `Depth Limit ${currentState.currentIDDSLimit - 2} Reached. Starting DLS at Limit ${currentState.currentIDDSLimit - 1}...`;
+                 statusClass = 'text-yellow-600';
+            }
+            statusEl.className = `font-semibold text-lg ${statusClass}`;
+            statusEl.textContent = statusText;
+
+            // --- Frontier Display ---
+            let frontierText = 'Empty';
+            let costDepthText = '';
+
+            if (currentState.algorithm === 'Bidirectional') {
+                const fwdNodes = currentState.biStartQueue.map(i => `${i.node}(C:${i.cost})`).join(', ');
+                const bwdNodes = currentState.biGoalQueue.map(i => `${i.node}(C:${i.cost})`).join(', ');
+                frontierText = `Fwd Queue: [${fwdNodes}] | Bwd Queue: [${bwdNodes}]`;
+            } else if (currentState.frontier) {
+                if (Array.isArray(currentState.frontier)) {
+                    // BFS/DFS/DLS/IDDFS (Array)
+                    frontierText = currentState.frontier.map(i => `${i.node}(D:${i.depth}, C:${i.cost})`).join(', ');
+                } else if (typeof currentState.frontier.display === 'function') {
+                    // UCS (PriorityQueue) - robust check
+                    frontierText = currentState.frontier.display();
+                }
+            }
+            frontierEl.textContent = frontierText || 'Empty';
+
+            // --- Cost/Depth Display for Current Node ---
+            const currentCost = currentState.costs[currentState.current] !== undefined ? currentState.costs[currentState.current].toFixed(1) : '-';
+            const currentDepth = currentState.depths[currentState.current] !== undefined ? currentState.depths[currentState.current] : '-';
+            costDepthEl.textContent = `Current Node Cost: ${currentCost}, Current Node Depth: ${currentDepth}`;
+
+
+            // --- Final Result ---
+            if (currentState.path) {
+                resultPathEl.textContent = currentState.path.join(' → ');
+
+                let totalCost = 0;
+                for (let i = 0; i < currentState.path.length - 1; i++) {
+                    const from = currentState.path[i];
+                    const to = currentState.path[i + 1];
+                    // Find the cost of the edge (handles directed graph)
+                    const edge = graph.edges[from] ? graph.edges[from].find(e => e.to === to) : null;
+                    if (edge) {
+                        totalCost += edge.weight;
+                    } else if (currentState.algorithm === 'Bidirectional' && !edge) {
+                        // Check for reverse edge in bidirectional search if the path goes reverse (BDS reconstructs the path array)
+                        // Note: If the path is correct, the edge should always be from A to B. We rely on the Bidirectional logic to ensure the path array is ordered start-to-goal.
+                        const reverseEdge = getReverseEdges(to).find(e => e.from === from); // Corrected check direction
+                        if(reverseEdge) totalCost += reverseEdge.weight;
+                    }
+                }
+                resultCostEl.textContent = totalCost.toFixed(1);
+            } else {
+                resultPathEl.textContent = '-';
+                resultCostEl.textContent = '-';
+            }
+        }
+
+
+        function toggleDepthLimitControl() {
+            const algo = document.getElementById('algorithm').value;
+            const control = document.getElementById('depthLimitControl');
+            if (algo === 'DLS' || algo === 'IDDFS') {
+                control.classList.remove('hidden');
+            } else {
+                control.classList.add('hidden');
+            }
+        }
+
+        function resetVisualization() {
+            clearInterval(animationInterval);
+            isSearchRunning = false;
+            document.getElementById('startButton').disabled = false;
+
+            // Clear state and redraw initial graph
+            currentState = initializeSearchState(document.getElementById('algorithm').value);
+            currentState.status = 'READY';
+            currentState.current = document.getElementById('startNode').value;
+
+            // Update UI before drawing to ensure correct frontier state
+            updateUI(); 
+            drawGraph();
+            toggleDepthLimitControl();
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            populateDropdowns();
+
+            // Initial setup of state and visualization
+            currentState = initializeSearchState(document.getElementById('algorithm').value);
+            currentState.status = 'READY';
+            currentState.current = document.getElementById('startNode').value;
+
+            // Set canvas size dynamically for responsiveness (if needed, but using fixed 800x600 for structured graph)
+            // canvas.width = canvas.parentElement.clientWidth;
+            // canvas.height = 600;
+
+            resetVisualization();
+            toggleDepthLimitControl();
+        };
+
+        // Handle window resize (optional, but good practice for responsiveness)
+        window.addEventListener('resize', () => {
+            // Redraw when resized
+            drawGraph();
+        });
+
+    </script>
+</body>
+</html>
